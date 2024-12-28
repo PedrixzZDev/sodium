@@ -3,35 +3,47 @@ package net.caffeinemc.mods.sodium.client.render.immediate.model;
 import java.util.Set;
 import net.minecraft.core.Direction;
 import org.jetbrains.annotations.NotNull;
+import net.minecraft.world.phys.Vec3;
 
-public class ModelCuboid {
-    // The ordering needs to be the same as Minecraft, otherwise some core shader replacements
-    // will be unable to identify the facing.
+public final class ModelCuboid {
+
     public static final int
-            FACE_NEG_Y = 0, // DOWN
-            FACE_POS_Y = 1, // UP
-            FACE_NEG_X = 2, // WEST
-            FACE_NEG_Z = 3, // NORTH
-            FACE_POS_X = 4, // EAST
-            FACE_POS_Z = 5; // SOUTH
+            FACE_NEG_Y = 0,
+            FACE_POS_Y = 1,
+            FACE_NEG_X = 2,
+            FACE_NEG_Z = 3,
+            FACE_POS_X = 4,
+            FACE_POS_Z = 5;
 
-    public final float x1, y1, z1;
-    public final float x2, y2, z2;
-
-    public final float u0, u1, u2, u3, u4, u5;
-    public final float v0, v1, v2;
+    public final Vec3 min;
+    public final Vec3 max;
+    
+    public final float u0;
+    public final float u1;
+    public final float u2;
+    public final float u3;
+    public final float u4;
+    public final float u5;
+    
+    public final float v0;
+    public final float v1;
+    public final float v2;
+    
 
     private final int cullBitmask;
-
+    
     public final boolean mirror;
 
-    public ModelCuboid(int u, int v,
-                       float x1, float y1, float z1,
-                       float sizeX, float sizeY, float sizeZ,
-                       float extraX, float extraY, float extraZ,
-                       boolean mirror,
-                       float textureWidth, float textureHeight,
-                       Set<Direction> renderDirections) {
+    public ModelCuboid(
+            float x1, float y1, float z1,
+            float sizeX, float sizeY, float sizeZ,
+            float extraX, float extraY, float extraZ,
+            boolean mirror,
+            float textureWidth, float textureHeight,
+            Set<Direction> renderDirections,
+            int u, int v
+    ) {
+
         float x2 = x1 + sizeX;
         float y2 = y1 + sizeY;
         float z2 = z1 + sizeZ;
@@ -44,22 +56,17 @@ public class ModelCuboid {
         y2 += extraY;
         z2 += extraZ;
 
-        if (mirror) {
+        if(mirror) {
             float tmp = x2;
             x2 = x1;
             x1 = tmp;
         }
 
-        this.x1 = x1 / 16.0f;
-        this.y1 = y1 / 16.0f;
-        this.z1 = z1 / 16.0f;
-
-        this.x2 = x2 / 16.0f;
-        this.y2 = y2 / 16.0f;
-        this.z2 = z2 / 16.0f;
-
-        var scaleU = 1.0f / textureWidth;
-        var scaleV = 1.0f / textureHeight;
+        this.min = new Vec3(x1 / 16.0f, y1 / 16.0f, z1 / 16.0f);
+        this.max = new Vec3(x2 / 16.0f, y2 / 16.0f, z2 / 16.0f);
+        
+       var scaleU = 1.0f / textureWidth;
+       var scaleV = 1.0f / textureHeight;
 
         this.u0 = scaleU * (u);
         this.u1 = scaleU * (u + sizeZ);
@@ -72,6 +79,7 @@ public class ModelCuboid {
         this.v1 = scaleV * (v + sizeZ);
         this.v2 = scaleV * (v + sizeZ + sizeY);
 
+
         this.mirror = mirror;
 
         int cullBitmask = 0;
@@ -82,6 +90,7 @@ public class ModelCuboid {
 
         this.cullBitmask = cullBitmask;
     }
+    
 
     public boolean shouldDrawFace(int faceIndex) {
         return (this.cullBitmask & (1 << faceIndex)) != 0;
