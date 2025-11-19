@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import net.caffeinemc.mods.sodium.client.util.MathUtil;
 import org.apache.commons.lang3.Validate;
 import org.jetbrains.annotations.NotNull;
+import org.joml.Intersectionf;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
@@ -98,6 +99,10 @@ public class VertexSorters {
     }
 
     public static int[] sort(ByteBuffer buffer, int vertexCount, int vertexStride, VertexSortingExtended sorting) {
+        if (sorting instanceof SortByDistanceToPoint pointMetric) {
+            return sortWithPerspective(buffer, vertexCount, vertexStride, pointMetric);
+        }
+
         Validate.isTrue(buffer.remaining() >= vertexStride * vertexCount,
                 "Vertex buffer is not large enough to contain all vertices");
 
@@ -132,6 +137,57 @@ public class VertexSorters {
             perm[primitiveId] = primitiveId;
 
             pVertex0 += primitiveStride;
+            pVertex2 += primitiveStride;
+        }
+
+        RadixSort.sortIndirect(perm, keys, true);
+
+        return perm;
+    }
+
+    private static int[] sortWithPerspective(ByteBuffer buffer, int vertexCount, int vertexStride, SortByDistanceToPoint pointMetric) {
+        Validate.isTrue(buffer.remaining() >= vertexStride * vertexCount,
+                "Vertex buffer is not large enough to contain all vertices");
+
+        long pVertex0 = MemoryUtil.memAddress(buffer);
+        long pVertex1 = MemoryUtil.memAddress(buffer, vertexStride);
+        long pVertex2 = MemoryUtil.memAddress(buffer, vertexStride * 2);
+
+        int primitiveCount = vertexCount / 4;
+        int primitiveStride = vertexStride * 4;
+
+        final int[] keys = new int[primitiveCount];
+        final int[] perm = new int[primitiveCount];
+
+        final var scratch = new Vector3f();
+
+        for (int primitiveId = 0; primitiveId < primitiveCount; primitiveId++) {
+            // instead of calculating the centroid, calculate the closest point on the quad (assuming it's flat and rectangular) to the camera, which may not be the centroid
+            float v0x = MemoryUtil.memGetFloat(pVertex0 + 0L);
+            float v0y = MemoryUtil.memGetFloat(pVertex0 + 4L);
+            float v0z = MemoryUtil.memGetFloat(pVertex0 + 8L);
+
+            float v1x = MemoryUtil.memGetFloat(pVertex1 + 0L);
+            float v1y = MemoryUtil.memGetFloat(pVertex1 + 4L);
+            float v1z = MemoryUtil.memGetFloat(pVertex1 + 8L);
+
+            float v2x = MemoryUtil.memGetFloat(pVertex2 + 0L);
+            float v2y = MemoryUtil.memGetFloat(pVertex2 + 4L);
+            float v2z = MemoryUtil.memGetFloat(pVertex2 + 8L);
+
+            Intersectionf.findClosestPointOnRectangle(
+                    v0x, v0y, v0z,
+                    v1x, v1y, v1z,
+                    v2x, v2y, v2z,
+                    pointMetric.x, pointMetric.y, pointMetric.z,
+                    scratch);
+
+            // The sign bit of the metric is negated as we need back-to-front (descending) ordering.
+            keys[primitiveId] = MathUtil.floatToComparableInt(-pointMetric.applyMetric(scratch.x, scratch.y, scratch.z));
+            perm[primitiveId] = primitiveId;
+
+            pVertex0 += primitiveStride;
+            pVertex1 += primitiveStride;
             pVertex2 += primitiveStride;
         }
 
